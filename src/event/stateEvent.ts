@@ -98,6 +98,29 @@ export class StateEvent extends Event {
     this.emit('syncStatusUpdated', status)
   }
 
+  /**
+   * Firebase同步状态更新
+   */
+  firebaseSyncStatusUpdated(status: {
+    connected: boolean
+    roomCode: string | null
+    isController: boolean
+    error?: string
+  }) {
+    this.emit('firebaseSyncStatusUpdated', status)
+  }
+
+  /**
+   * Firebase房间信息更新
+   */
+  firebaseRoomInfoUpdated(info: {
+    roomId: string | null
+    roomCode: string | null
+    participantCount: number
+  }) {
+    this.emit('firebaseRoomInfoUpdated', info)
+  }
+
   versionInfoUpdated(info: VersionState['versionInfo']) {
     this.emit('versionInfoUpdated', info)
   }

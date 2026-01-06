@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "597732709520",
+    "project_id": "lx-mate",
+    "storage_bucket": "lx-mate.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:597732709520:android:3361a5b852e9544a7d3415",
+        "android_client_info": {
+          "package_name": "cn.toside.music.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDIy9GABhRd9VJCDwr2F_lKzYuLYqATI9E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
