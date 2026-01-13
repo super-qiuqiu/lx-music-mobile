@@ -5,6 +5,10 @@ import { setProgress } from '@/core/player/progress'
 import { setIsPlay } from '@/core/player/playStatus'
 import { setPlayMusicInfo } from '@/core/player/playInfo'
 import playerState from '@/store/player/state'
+import playerActions from '@/store/player/action'
+import { getListMusics } from '@/core/list'
+import logger from './logger'
+import type { FirebaseCurrentMusic, FirebasePlayInfo } from './types'
 
 /**
  * 播放状态数据结构
@@ -47,7 +51,7 @@ class FirebaseSyncAdapter {
    */
   startListening(): void {
     if (this.isListening) {
-      console.log('[Firebase Sync] 已经在监听中')
+      logger.debug('Sync', '已经在监听中')
       return
     }
 
@@ -57,7 +61,7 @@ class FirebaseSyncAdapter {
     }
 
     this.isListening = true
-    console.log('[Firebase Sync] 开始监听房间:', roomId)
+    logger.info('Sync', '开始监听房间', { roomId })
 
     // 监听播放状态
     this.listenToPlaybackStatus(roomId)
@@ -84,7 +88,11 @@ class FirebaseSyncAdapter {
       // 如果是主控端，不接收其他端的状态更新
       if (isController) return
       
-      console.log('[Firebase Sync] 收到播放状态更新:', data)
+      logger.info('Sync', '收到播放状态更新', {
+        is_playing: data.is_playing,
+        current_time: data.current_time,
+        duration: data.duration,
+      })
       
       try {
         // 更新播放状态
@@ -93,7 +101,7 @@ class FirebaseSyncAdapter {
         // 更新播放进度
         setProgress(data.current_time || 0, data.duration || 0)
       } catch (error) {
-        console.error('[Firebase Sync] 应用播放状态失败:', error)
+        logger.error('Sync', '应用播放状态失败', error)
       }
     })
 
@@ -109,13 +117,16 @@ class FirebaseSyncAdapter {
     const listener = musicRef.on('value', async (snapshot) => {
       if (!snapshot.exists()) return
       
-      const data = snapshot.val()
+      const data: FirebaseCurrentMusic | null = snapshot.val()
       const isController = await roomManager.isController()
       
       // 如果是主控端，不接收其他端的歌曲更新
       if (isController) return
       
-      console.log('[Firebase Sync] 收到歌曲更新:', data)
+      logger.info('Sync', '收到歌曲更新', {
+        musicId: data?.id,
+        musicName: data?.name,
+      })
       
       if (!data) {
         setPlayMusicInfo(null, null, false)
@@ -123,30 +134,28 @@ class FirebaseSyncAdapter {
       }
       
       try {
-        // 转换为本地歌曲格式
+        // 转换为本地歌曲格式 - 使用any避免复杂的类型联合
         const musicInfo: LX.Music.MusicInfo = {
           id: data.id,
           name: data.name,
           singer: data.singer,
-          album: data.album || '',
-          source: 'kw', // 默认来源
-          interval: null,
+          source: data.source,
+          interval: data.interval,
           meta: {
+            songId: data.id,
             albumName: data.album || '',
             picUrl: data.pic_url || null,
-          },
-          type: {
-            '128k': null,
-            '320k': null,
-            flac: null,
-            flac24bit: null,
-          },
-        }
+            qualitys: [],
+            _qualitys: data.type || {},
+          } as any,
+        } as any
         
         // 更新当前播放歌曲
         setPlayMusicInfo(data.list_id, musicInfo, false)
+        
+        logger.debug('Sync', '歌曲信息已同步')
       } catch (error) {
-        console.error('[Firebase Sync] 应用歌曲信息失败:', error)
+        logger.error('Sync', '应用歌曲信息失败', error)
       }
     })
 
@@ -162,19 +171,49 @@ class FirebaseSyncAdapter {
     const listener = playInfoRef.on('value', async (snapshot) => {
       if (!snapshot.exists()) return
       
-      const data = snapshot.val()
+      const data: FirebasePlayInfo = snapshot.val()
       const isController = await roomManager.isController()
       
       // 如果是主控端，不接收其他端的播放信息更新
       if (isController) return
       
-      console.log('[Firebase Sync] 收到播放信息更新:', data)
+      logger.info('Sync', '收到播放信息更新', data)
       
-      // 播放信息主要用于同步播放列表位置
-      // 这里可以根据需要扩展
+      try {
+        // 更新播放索引
+        playerActions.updatePlayIndex(
+          data.play_index ?? -1,
+          data.player_play_index ?? -1
+        )
+        
+        // 更新播放列表ID
+        if (data.player_list_id &&
+            data.player_list_id !== playerState.playInfo.playerListId) {
+          playerActions.setPlayListId(data.player_list_id)
+          
+          // 确保列表已加载
+          await this.ensureListLoaded(data.player_list_id)
+        }
+        
+        logger.debug('Sync', '播放信息已同步')
+      } catch (error) {
+        logger.error('Sync', '应用播放信息失败', error)
+      }
     })
 
     this.listeners.push(() => playInfoRef.off('value', listener))
+  }
+
+  /**
+   * 确保列表已加载
+   */
+  private async ensureListLoaded(listId: string): Promise<void> {
+    try {
+      await getListMusics(listId)
+      logger.debug('Sync', '列表已加载', { listId })
+    } catch (error) {
+      logger.warn('Sync', '加载列表失败', { listId, error })
+    }
   }
 
   /**
@@ -183,7 +222,7 @@ class FirebaseSyncAdapter {
   stopListening(): void {
     if (!this.isListening) return
     
-    console.log('[Firebase Sync] 停止监听')
+    logger.info('Sync', '停止监听')
     
     // 移除所有监听器
     this.listeners.forEach(unsubscribe => unsubscribe())
@@ -196,11 +235,15 @@ class FirebaseSyncAdapter {
    */
   async updateRemoteState(forceUpdate = false): Promise<void> {
     const roomId = roomManager.getCurrentRoomId()
-    if (!roomId) return
+    if (!roomId) {
+      logger.debug('Sync', '未在房间中，跳过状态上报')
+      return
+    }
 
     const isController = await roomManager.isController()
     if (!isController && !forceUpdate) {
-      // 非主控端一般不上报状态
+      // 非主控端不上报状态
+      logger.debug('Sync', '非主控端，跳过状态上报')
       return
     }
 
@@ -231,7 +274,7 @@ class FirebaseSyncAdapter {
         updated_at: database.ServerValue.TIMESTAMP,
       }
 
-      // 当前歌曲
+      // 当前歌曲 - 包含完整信息
       if (state.playMusicInfo.musicInfo) {
         const musicInfo = state.playMusicInfo.musicInfo
         updates[`sync_rooms/${roomId}/playback_state/current_music`] = {
@@ -241,6 +284,10 @@ class FirebaseSyncAdapter {
           album: ('meta' in musicInfo && musicInfo.meta.albumName) || '',
           pic_url: ('meta' in musicInfo && musicInfo.meta.picUrl) || null,
           list_id: state.playMusicInfo.listId,
+          // 新增完整字段
+          source: musicInfo.source,
+          interval: musicInfo.interval,
+          type: ('meta' in musicInfo && '_qualitys' in musicInfo.meta ? musicInfo.meta._qualitys : {}) as any,
         }
       } else {
         updates[`sync_rooms/${roomId}/playback_state/current_music`] = null
@@ -256,9 +303,9 @@ class FirebaseSyncAdapter {
       // 批量更新
       await database().ref().update(updates)
 
-      console.log('[Firebase Sync] 状态已上报')
+      logger.debug('Sync', '状态已上报')
     } catch (error) {
-      console.error('[Firebase Sync] 上报状态失败:', error)
+      logger.error('Sync', '上报状态失败', error)
     } finally {
       this.isUpdating = false
     }

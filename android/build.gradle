@@ -3,7 +3,7 @@
 buildscript {
     ext {
         buildToolsVersion = "35.0.0"
-        minSdkVersion = 21
+        minSdkVersion = 23
         compileSdkVersion = 36
         targetSdkVersion = 29
 
@@ -15,6 +15,10 @@ buildscript {
         excludeAppGlideModule = true
     }
     repositories {
+        // 添加阿里云镜像(优先使用,加速依赖下载)
+        maven { url 'https://maven.aliyun.com/repository/public/' }
+        maven { url 'https://maven.aliyun.com/repository/google/' }
+        maven { url 'https://maven.aliyun.com/repository/jcenter/' }
         google()
         mavenCentral()
     }
@@ -23,6 +27,17 @@ buildscript {
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
         classpath('com.google.gms:google-services:4.4.2')
+    }
+}
+
+allprojects {
+    repositories {
+        // 添加阿里云镜像(优先使用,加速依赖下载)
+        maven { url 'https://maven.aliyun.com/repository/public/' }
+        maven { url 'https://maven.aliyun.com/repository/google/' }
+        maven { url 'https://maven.aliyun.com/repository/jcenter/' }
+        google()
+        mavenCentral()
     }
 }
 

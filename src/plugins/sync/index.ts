@@ -18,6 +18,7 @@ export {
   isController as isFirebaseController,
   setController as setFirebaseController,
   onConnectionStatusChange as onFirebaseStatusChange,
+  syncPlaylist as syncFirebasePlaylist,
 } from './firebase'
 
 // 导出Firebase类型

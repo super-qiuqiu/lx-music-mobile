@@ -1,5 +1,6 @@
 import database from '@react-native-firebase/database'
 import firebaseConnection from './connection'
+import logger from './logger'
 
 /**
  * 房间信息接口
@@ -91,10 +92,10 @@ class RoomManager {
       this.currentRoomId = roomId
       this.currentRoomCode = roomCode
 
-      console.log(`[Firebase Room] 房间创建成功: ${roomCode}`)
+      logger.info('Room', '房间创建成功', { roomCode })
       return { roomId, roomCode }
     } catch (error) {
-      console.error('[Firebase Room] 创建房间失败:', error)
+      logger.error('Room', '创建房间失败', error)
       throw error
     }
   }
@@ -148,10 +149,10 @@ class RoomManager {
       this.currentRoomId = roomId
       this.currentRoomCode = roomCode
 
-      console.log(`[Firebase Room] 加入房间成功: ${roomCode}`)
+      logger.info('Room', '加入房间成功', { roomCode })
       return roomId
     } catch (error) {
-      console.error('[Firebase Room] 加入房间失败:', error)
+      logger.error('Room', '加入房间失败', error)
       throw error
     }
   }
@@ -183,14 +184,14 @@ class RoomManager {
       // 如果没有参与者了，删除整个房间
       if (!participantsSnapshot.exists() || !participantsSnapshot.hasChildren()) {
         await database().ref(`sync_rooms/${this.currentRoomId}`).remove()
-        console.log(`[Firebase Room] 房间已删除: ${this.currentRoomCode}`)
+        logger.info('Room', '房间已删除', { roomCode: this.currentRoomCode })
       }
 
-      console.log(`[Firebase Room] 离开房间: ${this.currentRoomCode}`)
+      logger.info('Room', '离开房间', { roomCode: this.currentRoomCode })
       this.currentRoomId = null
       this.currentRoomCode = null
     } catch (error) {
-      console.error('[Firebase Room] 离开房间失败:', error)
+      logger.error('Room', '离开房间失败', error)
       throw error
     }
   }
@@ -231,7 +232,7 @@ class RoomManager {
       
       return snapshot.val()
     } catch (error) {
-      console.error('[Firebase Room] 获取房间信息失败:', error)
+      logger.error('Room', '获取房间信息失败', error)
       return null
     }
   }
@@ -256,7 +257,7 @@ class RoomManager {
       
       return snapshot.val() === userId
     } catch (error) {
-      console.error('[Firebase Room] 检查主控权失败:', error)
+      logger.error('Room', '检查主控权失败', error)
       return false
     }
   }
@@ -279,9 +280,9 @@ class RoomManager {
         .ref(`sync_rooms/${this.currentRoomId}/playback_state/controller_id`)
         .set(controllerId)
       
-      console.log(`[Firebase Room] 主控权已设置: ${controllerId}`)
+      logger.info('Room', '主控权已设置', { controllerId })
     } catch (error) {
-      console.error('[Firebase Room] 设置主控权失败:', error)
+      logger.error('Room', '设置主控权失败', error)
       throw error
     }
   }

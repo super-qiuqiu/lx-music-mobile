@@ -1,5 +1,7 @@
 import auth from '@react-native-firebase/auth'
 import database from '@react-native-firebase/database'
+import { withErrorHandler, retryWithBackoff, FirebaseErrorCode, createFirebaseError } from './errorHandler'
+import logger from './logger'
 
 /**
  * Firebase连接状态
@@ -32,34 +34,41 @@ class FirebaseConnection {
     try {
       this.setStatus('connecting')
       
-      // 检查是否已有用户登录
-      const currentUser = auth().currentUser
-      if (currentUser) {
-        this.currentUser = currentUser
-      } else {
-        // 使用匿名认证
-        const userCredential = await auth().signInAnonymously()
-        this.currentUser = userCredential.user
-      }
-
-      // 获取数据库引用
-      this.databaseRef = database()
-      
-      // 监听连接状态
-      const connectedRef = database().ref('.info/connected')
-      connectedRef.on('value', (snapshot) => {
-        if (snapshot.val() === true) {
-          this.setStatus('connected')
+      // 使用重试机制初始化
+      await retryWithBackoff(async () => {
+        // 检查是否已有用户登录
+        const currentUser = auth().currentUser
+        if (currentUser) {
+          this.currentUser = currentUser
         } else {
-          this.setStatus('disconnected')
+          // 使用匿名认证
+          const userCredential = await auth().signInAnonymously()
+          this.currentUser = userCredential.user
         }
-      })
 
-      this.setStatus('connected')
+        // 获取数据库引用
+        this.databaseRef = database()
+        
+        // 监听连接状态
+        const connectedRef = database().ref('.info/connected')
+        connectedRef.on('value', (snapshot) => {
+          if (snapshot.val() === true) {
+            this.setStatus('connected')
+          } else {
+            this.setStatus('disconnected')
+          }
+        })
+
+        this.setStatus('connected')
+      }, 3, 1000)
     } catch (error) {
-      console.error('[Firebase] 初始化失败:', error)
+      logger.error('Connection', '初始化失败', error)
       this.setStatus('error')
-      throw error
+      throw createFirebaseError(
+        FirebaseErrorCode.CONNECTION_FAILED,
+        'Firebase初始化失败',
+        error
+      )
     }
   }
 
@@ -78,7 +87,7 @@ class FirebaseConnection {
       this.setStatus('disconnected')
       this.currentUser = null
     } catch (error) {
-      console.error('[Firebase] 断开连接失败:', error)
+      logger.error('Connection', '断开连接失败', error)
       throw error
     }
   }
@@ -88,7 +97,10 @@ class FirebaseConnection {
    */
   getDatabase() {
     if (!this.databaseRef) {
-      throw new Error('[Firebase] 数据库未初始化')
+      throw createFirebaseError(
+        FirebaseErrorCode.NOT_INITIALIZED,
+        'Firebase数据库未初始化'
+      )
     }
     return this.databaseRef
   }
@@ -139,7 +151,7 @@ class FirebaseConnection {
       try {
         callback(status)
       } catch (error) {
-        console.error('[Firebase] 状态回调执行失败:', error)
+        logger.error('Connection', '状态回调执行失败', error)
       }
     })
   }

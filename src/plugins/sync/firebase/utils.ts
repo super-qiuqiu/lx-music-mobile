@@ -1,6 +1,7 @@
 /**
  * Firebase工具函数
  */
+import logger from './logger'
 
 /**
  * 验证房间码格式
@@ -81,7 +82,7 @@ export async function safeAsync<T>(
   try {
     return await fn()
   } catch (error) {
-    console.error('[Firebase Utils] 异步操作失败:', error)
+    logger.error('Utils', '异步操作失败', error)
     if (errorHandler) {
       errorHandler(error)
     }
@@ -104,7 +105,7 @@ export async function retry<T>(
       return await fn()
     } catch (error) {
       lastError = error
-      console.log(`[Firebase Utils] 重试 ${i + 1}/${maxRetries}...`)
+      logger.debug('Utils', `重试 ${i + 1}/${maxRetries}...`)
       if (i < maxRetries - 1) {
         await new Promise(resolve => setTimeout(resolve, delayMs * (i + 1)))
       }

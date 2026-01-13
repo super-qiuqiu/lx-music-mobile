@@ -5,7 +5,10 @@
 import firebaseConnection from './connection'
 import roomManager from './room'
 import syncAdapter from './sync'
+import playerSync from './playerSync'
+import playlistSync from './playlistSync'
 import * as utils from './utils'
+import logger from './logger'
 
 /**
  * 连接Firebase并创建房间
@@ -21,9 +24,15 @@ export async function connectAndCreateRoom(): Promise<{ roomId: string; roomCode
     // 开始监听状态变化
     syncAdapter.startListening()
     
+    // 启动播放器状态同步
+    playerSync.start()
+    
+    // 启动播放列表同步
+    playlistSync.startListening()
+    
     return result
   } catch (error) {
-    console.error('[Firebase] 连接并创建房间失败:', error)
+    logger.error('Firebase', '连接并创建房间失败', error)
     throw error
   }
 }
@@ -50,9 +59,15 @@ export async function connectAndJoinRoom(roomCode: string): Promise<string> {
     // 开始监听状态变化
     syncAdapter.startListening()
     
+    // 启动播放器状态同步
+    playerSync.start()
+    
+    // 启动播放列表同步
+    playlistSync.startListening()
+    
     return roomId
   } catch (error) {
-    console.error('[Firebase] 连接并加入房间失败:', error)
+    logger.error('Firebase', '连接并加入房间失败', error)
     throw error
   }
 }
@@ -62,6 +77,12 @@ export async function connectAndJoinRoom(roomCode: string): Promise<string> {
  */
 export async function disconnectFirebase(): Promise<void> {
   try {
+    // 停止播放器状态同步
+    playerSync.stop()
+    
+    // 停止播放列表同步
+    playlistSync.stopListening()
+    
     // 停止状态同步
     syncAdapter.stopListening()
     
@@ -71,7 +92,7 @@ export async function disconnectFirebase(): Promise<void> {
     // 断开Firebase连接
     await firebaseConnection.disconnect()
   } catch (error) {
-    console.error('[Firebase] 断开连接失败:', error)
+    logger.error('Firebase', '断开连接失败', error)
     throw error
   }
 }
@@ -122,6 +143,13 @@ export async function setController(userId?: string): Promise<void> {
  */
 export function onConnectionStatusChange(callback: (status: string) => void) {
   return firebaseConnection.onStatusChange(callback)
+}
+
+/**
+ * 同步播放列表
+ */
+export async function syncPlaylist(listId: string): Promise<void> {
+  return await playlistSync.syncPlaylist(listId)
 }
 
 // 导出工具函数
